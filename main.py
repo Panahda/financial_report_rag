@@ -8,6 +8,7 @@ from datetime import datetime
 import subprocess
 import torch
 import random
+import csv
 
 # Core libraries
 import chromadb
@@ -43,11 +44,19 @@ class FinancialReportRAG:
                  collection_name: str = "financial_reports",
                  persist_directory: str = "./chroma_db",
                  use_gpu: bool = None,
-                 use_quantization: bool = True):  # Add quantization option
+                 use_quantization: bool = True,  # Add quantization option
+                 save_chunks: bool = True):  # Add option to save chunks
     
         self.model_name = model_name
         self.collection_name = collection_name
         self.persist_directory = persist_directory
+        self.save_chunks = save_chunks
+        
+        # Create directory for processed chunks
+        if self.save_chunks:
+            self.chunks_dir = Path(f"processed_chunks/{collection_name}")
+            self.chunks_dir.mkdir(parents=True, exist_ok=True)
+            logger.info(f"📁 Chunks will be saved to: {self.chunks_dir}")
         
         # Auto-detect GPU if not specified
         if use_gpu is None:
@@ -213,7 +222,7 @@ class FinancialReportRAG:
                 logger.info(f"✅ Tesseract OCR available")
                 self.ocr_available = True
             else:
-                logger.warning("⚠️ Tfesseract OCR not found")
+                logger.warning("⚠️ Tesseract OCR not found")
                 self.ocr_available = False
         except:
             logger.warning("⚠️ Tesseract OCR not available")
@@ -222,6 +231,7 @@ class FinancialReportRAG:
     def setup_vector_store(self):
         """Initialize or load existing vector store"""
         try:
+            # Try to get existing collection
             collection = self.chroma_client.get_collection(name=self.collection_name)
             logger.info(f"Loaded existing collection: {self.collection_name}")
             
@@ -233,6 +243,9 @@ class FinancialReportRAG:
             
         except Exception as e:
             logger.info(f"Creating new collection: {self.collection_name}")
+            # Create new collection
+            self.chroma_client.create_collection(name=self.collection_name)
+            
             self.vector_store = Chroma(
                 client=self.chroma_client,
                 collection_name=self.collection_name,
@@ -276,10 +289,17 @@ class FinancialReportRAG:
                 if not text.strip():
                     continue
                 
-                # Extract page number if available
+                # Extract page number if available - FIX: Handle ElementMetadata object properly
                 page_num = None
-                if hasattr(chunk, 'metadata') and chunk.metadata:
-                    page_num = chunk.metadata.get('page_number', None)
+                if hasattr(chunk, 'metadata'):
+                    metadata_obj = chunk.metadata
+                    if metadata_obj is not None:
+                        # ElementMetadata is an object with attributes, not a dictionary
+                        if hasattr(metadata_obj, 'page_number'):
+                            page_num = metadata_obj.page_number
+                        elif hasattr(metadata_obj, '__dict__'):
+                            # Try to access via __dict__ if it exists
+                            page_num = metadata_obj.__dict__.get('page_number', None)
                 
                 # Search for entities in the text
                 entities_found = self.extract_entities_from_text(text)
@@ -301,7 +321,7 @@ class FinancialReportRAG:
             logger.info(f"✅ Extracted {len(documents)} chunks from {os.path.basename(pdf_path)}")
             
         except Exception as e:
-            logger.error(f"❌ Error processing {pdf_path}: {e}")
+            logger.error(f"❌ Error processing {pdf_path} with unstructured: {e}")
             
             # Fallback: Try simple text extraction
             try:
@@ -338,8 +358,8 @@ class FinancialReportRAG:
                                     documents.append(doc)
                         
                         logger.info(f"✅ Fallback extraction successful: {len(documents)} chunks")
-                    except:
-                        logger.error(f"Failed to process PDF with fallback method")
+                    except Exception as pypdf_error:
+                        logger.error(f"Failed to process PDF with fallback method: {pypdf_error}")
                         
             except Exception as e2:
                 logger.error(f"Fallback extraction failed: {e2}")
@@ -360,6 +380,102 @@ class FinancialReportRAG:
             found_entities[entity_type] = list(set(found_entities[entity_type]))
         
         return found_entities
+    
+    def _save_chunks_to_file(self, pdf_name: str, documents: List[Document], all_chunks_data: List[Dict]):
+        """Save chunks from a PDF to individual files and collect for consolidated file"""
+        try:
+            # Create subdirectory for this PDF
+            pdf_dir = self.chunks_dir / pdf_name.replace('.pdf', '')
+            pdf_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Save individual chunks
+            for i, doc in enumerate(documents):
+                chunk_data = {
+                    'file_name': pdf_name,
+                    'chunk_index': i,
+                    'page': doc.metadata.get('page', 'unknown'),
+                    'content': doc.page_content,
+                    'entities': doc.metadata.get('entities', {}),
+                    'content_length': len(doc.page_content),
+                    'processed_date': doc.metadata.get('processed_date', datetime.now().isoformat())
+                }
+                
+                # Save individual chunk as JSON
+                chunk_file = pdf_dir / f"chunk_{i:04d}.json"
+                with open(chunk_file, 'w', encoding='utf-8') as f:
+                    json.dump(chunk_data, f, indent=2, ensure_ascii=False)
+                
+                # Add to consolidated data
+                all_chunks_data.append(chunk_data)
+            
+            # Save summary for this PDF
+            summary = {
+                'pdf_name': pdf_name,
+                'total_chunks': len(documents),
+                'total_characters': sum(len(doc.page_content) for doc in documents),
+                'pages_covered': list(set(doc.metadata.get('page', 'unknown') for doc in documents)),
+                'entities_found': {
+                    'CAR': sum(len(doc.metadata.get('entities', {}).get('CAR', [])) for doc in documents),
+                    'CL': sum(len(doc.metadata.get('entities', {}).get('CL', [])) for doc in documents),
+                    'FAR': sum(len(doc.metadata.get('entities', {}).get('FAR', [])) for doc in documents)
+                },
+                'processed_date': datetime.now().isoformat()
+            }
+            
+            summary_file = pdf_dir / 'summary.json'
+            with open(summary_file, 'w', encoding='utf-8') as f:
+                json.dump(summary, f, indent=2, ensure_ascii=False)
+            
+            logger.info(f"  💾 Saved {len(documents)} chunks to {pdf_dir}")
+            
+        except Exception as e:
+            logger.error(f"Failed to save chunks for {pdf_name}: {e}")
+    
+    def _save_consolidated_chunks(self, all_chunks_data: List[Dict]):
+        """Save all chunks to a consolidated file"""
+        try:
+            # Create consolidated JSON file with all chunks
+            consolidated_file = self.chunks_dir / f"all_chunks_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            
+            consolidated_data = {
+                'collection_name': self.collection_name,
+                'total_chunks': len(all_chunks_data),
+                'total_files': len(set(chunk['file_name'] for chunk in all_chunks_data)),
+                'extraction_date': datetime.now().isoformat(),
+                'chunks': all_chunks_data
+            }
+            
+            with open(consolidated_file, 'w', encoding='utf-8') as f:
+                json.dump(consolidated_data, f, indent=2, ensure_ascii=False)
+            
+            # Also create a CSV for easy viewing
+            csv_file = self.chunks_dir / f"chunks_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            with open(csv_file, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.DictWriter(f, fieldnames=[
+                    'file_name', 'chunk_index', 'page', 'content_length',
+                    'car_count', 'cl_count', 'far_count', 'content_preview'
+                ])
+                writer.writeheader()
+                
+                for chunk in all_chunks_data:
+                    entities = chunk.get('entities', {})
+                    writer.writerow({
+                        'file_name': chunk['file_name'],
+                        'chunk_index': chunk['chunk_index'],
+                        'page': chunk.get('page', 'unknown'),
+                        'content_length': chunk['content_length'],
+                        'car_count': len(entities.get('CAR', [])),
+                        'cl_count': len(entities.get('CL', [])),
+                        'far_count': len(entities.get('FAR', [])),
+                        'content_preview': chunk['content'][:100] + '...' if len(chunk['content']) > 100 else chunk['content']
+                    })
+            
+            logger.info(f"📊 Saved consolidated chunks to:")
+            logger.info(f"   JSON: {consolidated_file}")
+            logger.info(f"   CSV: {csv_file}")
+            
+        except Exception as e:
+            logger.error(f"Failed to save consolidated chunks: {e}")
     
     def batch_process_pdfs(self, 
                           pdf_directory: str,
@@ -390,6 +506,14 @@ class FinancialReportRAG:
         
         logger.info(f"📚 Found {len(pdf_files)} PDF files to process")
         
+        # Ensure vector store is initialized
+        if not self.vector_store:
+            logger.error("Vector store not initialized! Please run setup_vector_store() first.")
+            return
+        
+        # Initialize chunks storage
+        all_chunks_data = []
+        
         # Process in batches
         total_processed = 0
         total_chunks = 0
@@ -413,6 +537,10 @@ class FinancialReportRAG:
                         total_processed += 1
                         total_chunks += len(documents)
                         logger.info(f"  ✅ {pdf_file.name}: {len(documents)} chunks")
+                        
+                        # Save chunks if enabled
+                        if self.save_chunks:
+                            self._save_chunks_to_file(pdf_file.name, documents, all_chunks_data)
                     else:
                         logger.warning(f"  ⚠️ {pdf_file.name}: No content extracted")
                         
@@ -420,21 +548,47 @@ class FinancialReportRAG:
                     logger.error(f"  ❌ {pdf_file.name}: {e}")
             
             # Add batch to vector store
-            if batch_documents and self.vector_store:
+            if batch_documents:
                 try:
                     logger.info(f"Adding {len(batch_documents)} chunks to vector store...")
-                    self.vector_store.add_documents(batch_documents)
+                    
+                    # Add documents in smaller sub-batches to avoid memory issues
+                    sub_batch_size = 20
+                    for i in range(0, len(batch_documents), sub_batch_size):
+                        sub_batch = batch_documents[i:i+sub_batch_size]
+                        self.vector_store.add_documents(sub_batch)
+                        logger.info(f"  Added sub-batch {i//sub_batch_size + 1}: {len(sub_batch)} documents")
+                    
                     logger.info(f"✅ Batch added to vector store")
+                    
+                    # Persist the collection to ensure data is saved
+                    self.vector_store.persist()
+                    
                 except Exception as e:
                     logger.error(f"Failed to add batch to vector store: {e}")
+                    logger.error(f"Error details: {str(e)}")
             
             # Clear memory
             if self.device == 'cuda':
                 torch.cuda.empty_cache()
         
+        # Save consolidated chunks file
+        if self.save_chunks and all_chunks_data:
+            self._save_consolidated_chunks(all_chunks_data)
+        
+        # Final persist to ensure all data is saved
+        if self.vector_store:
+            try:
+                self.vector_store.persist()
+                logger.info("✅ Vector store persisted successfully")
+            except Exception as e:
+                logger.error(f"Failed to persist vector store: {e}")
+        
         logger.info(f"🎉 Processing complete!")
         logger.info(f"   Files processed: {total_processed}/{len(pdf_files)}")
         logger.info(f"   Total chunks created: {total_chunks}")
+        if self.save_chunks:
+            logger.info(f"   Chunks saved to: {self.chunks_dir}")
     
     def setup_qa_chain(self):
         """Set up the QA chain for querying"""
@@ -501,40 +655,64 @@ class FinancialReportRAG:
     def generate_summary_report(self) -> Dict[str, Any]:
         """Generate a summary report of the collection"""
         try:
-            # Get collection stats
+            # Get collection
             collection = self.chroma_client.get_collection(name=self.collection_name)
             count = collection.count()
             
-            # Get all documents to analyze entities
-            all_docs = collection.get(
-                include=["metadatas"],
-                limit=count
-            )
+            logger.info(f"Collection '{self.collection_name}' has {count} documents")
             
-            # Count entities
-            entity_counts = {'CAR': 0, 'CL': 0, 'FAR': 0}
-            file_set = set()
+            # Get sample of documents to analyze entities (limit to avoid memory issues)
+            sample_size = min(count, 1000)
             
-            for metadata in all_docs['metadatas']:
-                file_set.add(metadata.get('file_name', 'Unknown'))
-                entities = metadata.get('entities', {})
-                for entity_type in entity_counts:
-                    entity_counts[entity_type] += len(entities.get(entity_type, []))
-            
-            return {
-                'total_documents': count,
-                'unique_files': len(file_set),
-                'entities_found': entity_counts,
-                'files': list(file_set)
-            }
+            if count > 0:
+                all_docs = collection.get(
+                    include=["metadatas"],
+                    limit=sample_size
+                )
+                
+                # Count entities
+                entity_counts = {'CAR': 0, 'CL': 0, 'FAR': 0}
+                file_set = set()
+                
+                for metadata in all_docs['metadatas']:
+                    file_set.add(metadata.get('file_name', 'Unknown'))
+                    entities = metadata.get('entities', {})
+                    for entity_type in entity_counts:
+                        entity_counts[entity_type] += len(entities.get(entity_type, []))
+                
+                result = {
+                    'total_documents': count,
+                    'unique_files': len(file_set),
+                    'entities_found': entity_counts,
+                    'files': list(file_set),
+                    'sample_size': sample_size
+                }
+                
+                # Add chunks directory info if saving chunks
+                if self.save_chunks and self.chunks_dir.exists():
+                    chunk_files = list(self.chunks_dir.glob('**/*.json'))
+                    result['chunks_saved'] = len(chunk_files)
+                    result['chunks_directory'] = str(self.chunks_dir)
+                
+                return result
+            else:
+                return {
+                    'total_documents': 0,
+                    'unique_files': 0,
+                    'entities_found': {'CAR': 0, 'CL': 0, 'FAR': 0},
+                    'files': [],
+                    'sample_size': 0
+                }
             
         except Exception as e:
             logger.error(f"Failed to generate summary: {e}")
+            logger.error(f"Error details: {str(e)}")
             return {
                 'total_documents': 0,
                 'unique_files': 0,
                 'entities_found': {'CAR': 0, 'CL': 0, 'FAR': 0},
-                'files': []
+                'files': [],
+                'error': str(e)
             }
 
 
@@ -547,22 +725,27 @@ def main():
                        help='Disable 4-bit quantization')
     parser.add_argument('--force-cpu', action='store_true',
                        help='Force CPU usage')
+    parser.add_argument('--no-save-chunks', action='store_true',
+                       help='Do not save processed chunks to files')
     
     args = parser.parse_args()
     
     use_quantization = not args.no_quantization
     use_gpu = None if not args.force_cpu else False
+    save_chunks = not args.no_save_chunks
     
     print(f"Initializing RAG with Phi-4-mini...")
     print(f"Model path: {DEFAULT_MODEL}")
     print(f"Quantization: {use_quantization}")
+    print(f"Save chunks: {save_chunks}")
     
     # Initialize RAG
     rag = FinancialReportRAG(
         model_name=DEFAULT_MODEL,
         collection_name="financial_reports",
         use_gpu=use_gpu,
-        use_quantization=use_quantization
+        use_quantization=use_quantization,
+        save_chunks=save_chunks
     )
     
     # Test the model

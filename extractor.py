@@ -54,6 +54,14 @@ class EntityExtractor:
         try:
             self.collection = self.chroma_client.get_collection(name=collection_name)
             logger.info(f"✅ Connected to collection: {collection_name}")
+            
+            # Check if collection has documents
+            doc_count = self.collection.count()
+            if doc_count == 0:
+                logger.warning(f"⚠️ Collection '{collection_name}' is empty (0 documents)")
+            else:
+                logger.info(f"📊 Collection has {doc_count} documents")
+                
         except Exception as e:
             logger.error(f"❌ Failed to connect to collection: {e}")
             raise
@@ -197,33 +205,54 @@ IMPORTANT: Only extract items that are clearly identified as audit findings. Do 
         """Extract all entities from the collection"""
         logger.info("Starting entity extraction from collection...")
         
+        # Check if collection is empty
+        doc_count = self.collection.count()
+        if doc_count == 0:
+            logger.warning("⚠️ Collection is empty. No documents to process.")
+            # Return empty results
+            self._save_results([], {"CAR": [], "CL": [], "FAR": []})
+            return [], {"CAR": [], "CL": [], "FAR": []}
+        
         # Get all documents from collection
         try:
             # Get documents in batches
             all_docs = []
-            offset = 0
             batch_size = 100
             
-            while True:
+            # Use the actual count from the collection
+            total_batches = (doc_count + batch_size - 1) // batch_size
+            
+            for batch_num in range(total_batches):
+                offset = batch_num * batch_size
+                limit = min(batch_size, doc_count - offset)
+                
+                logger.info(f"Retrieving batch {batch_num + 1}/{total_batches} (offset: {offset}, limit: {limit})")
+                
                 batch = self.collection.get(
                     include=["documents", "metadatas"],
-                    limit=batch_size,
+                    limit=limit,
                     offset=offset
                 )
                 
-                if not batch["documents"]:
-                    break
-                    
-                all_docs.extend(zip(batch["documents"], batch["metadatas"]))
-                offset += batch_size
-                
-                logger.info(f"Retrieved {len(all_docs)} documents so far...")
+                if batch["documents"]:
+                    for doc, meta in zip(batch["documents"], batch["metadatas"]):
+                        all_docs.append((doc, meta))
+                    logger.info(f"  Retrieved {len(batch['documents'])} documents in this batch")
+                else:
+                    logger.warning(f"  No documents in batch {batch_num + 1}")
             
-            logger.info(f"Total documents to process: {len(all_docs)}")
+            logger.info(f"Total documents retrieved: {len(all_docs)}")
+            
+            if not all_docs:
+                logger.warning("No documents retrieved from collection")
+                self._save_results([], {"CAR": [], "CL": [], "FAR": []})
+                return [], {"CAR": [], "CL": [], "FAR": []}
             
         except Exception as e:
             logger.error(f"Failed to retrieve documents: {e}")
-            return [], {}
+            logger.error(f"Error details: {str(e)}")
+            self._save_results([], {"CAR": [], "CL": [], "FAR": []})
+            return [], {"CAR": [], "CL": [], "FAR": []}
         
         # Group documents by file
         docs_by_file = {}
@@ -306,7 +335,7 @@ IMPORTANT: Only extract items that are clearly identified as audit findings. Do 
             json.dump(detailed_report, f, indent=2)
         logger.info(f"📁 Saved detailed report: {json_path}")
         
-        # Save CSV files for each entity type
+        # Save CSV files for each entity type (only if entities exist)
         for entity_type in ["CAR", "CL", "FAR"]:
             if all_entities[entity_type]:
                 csv_path = self.results_dir / f"{entity_type.lower()}_entities_{timestamp}.csv"
@@ -334,14 +363,17 @@ IMPORTANT: Only extract items that are clearly identified as audit findings. Do 
             f.write(f"Total FARs: {len(all_entities['FAR'])}\n")
             f.write(f"Total Entities: {sum(len(v) for v in all_entities.values())}\n\n")
             
-            f.write(f"Per-File Breakdown:\n")
-            f.write(f"-" * 30 + "\n")
-            for fs in sorted(file_summaries, key=lambda x: x["total_entities"], reverse=True):
-                if fs["total_entities"] > 0:
-                    f.write(f"\n{fs['file_name']}:\n")
-                    f.write(f"  CARs: {fs['car_count']}\n")
-                    f.write(f"  CLs: {fs['cl_count']}\n")
-                    f.write(f"  FARs: {fs['far_count']}\n")
+            if file_summaries:
+                f.write(f"Per-File Breakdown:\n")
+                f.write(f"-" * 30 + "\n")
+                for fs in sorted(file_summaries, key=lambda x: x["total_entities"], reverse=True):
+                    if fs["total_entities"] > 0:
+                        f.write(f"\n{fs['file_name']}:\n")
+                        f.write(f"  CARs: {fs['car_count']}\n")
+                        f.write(f"  CLs: {fs['cl_count']}\n")
+                        f.write(f"  FARs: {fs['far_count']}\n")
+            else:
+                f.write("No files were processed (collection is empty)\n")
         
         logger.info(f"📁 Saved summary report: {summary_path}")
 
@@ -376,15 +408,18 @@ def main():
     print(f"📊 Results saved to: results/{args.collection}/")
     
     # Print summary
-    total_cars = sum(fs['car_count'] for fs in file_summaries)
-    total_cls = sum(fs['cl_count'] for fs in file_summaries)
-    total_fars = sum(fs['far_count'] for fs in file_summaries)
-    
-    print(f"\nSummary:")
-    print(f"  Files processed: {len(file_summaries)}")
-    print(f"  Total CARs: {total_cars}")
-    print(f"  Total CLs: {total_cls}")
-    print(f"  Total FARs: {total_fars}")
+    if file_summaries:
+        total_cars = sum(fs['car_count'] for fs in file_summaries)
+        total_cls = sum(fs['cl_count'] for fs in file_summaries)
+        total_fars = sum(fs['far_count'] for fs in file_summaries)
+        
+        print(f"\nSummary:")
+        print(f"  Files processed: {len(file_summaries)}")
+        print(f"  Total CARs: {total_cars}")
+        print(f"  Total CLs: {total_cls}")
+        print(f"  Total FARs: {total_fars}")
+    else:
+        print("\nNo documents found in collection to process.")
 
 if __name__ == "__main__":
     main()
