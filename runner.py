@@ -9,6 +9,7 @@ from pathlib import Path
 # Import the modified RAG class
 from main import FinancialReportRAG, DEFAULT_MODEL
 from extractor import EntityExtractor
+import chromadb
 
 def main():
     parser = argparse.ArgumentParser(description='Process PDFs into RAG system using HuggingFace models')
@@ -36,9 +37,27 @@ def main():
     # CPU/GPU control
     parser.add_argument('--force-cpu', action='store_true',
                        help='Force CPU-only mode even if GPU is available')
+                       
+    # Add a reset flag
+    parser.add_argument('--reset-collection', action='store_true',
+                       help='Delete and reset the collection before processing')
     
     args = parser.parse_args()
     
+    # --- Start of the fix ---
+    persist_directory = "./chroma_db"
+    
+    # If reset flag is used, delete the collection
+    if args.reset_collection:
+        print(f"🔄 Resetting collection: {args.collection}")
+        try:
+            client = chromadb.PersistentClient(path=persist_directory)
+            client.delete_collection(name=args.collection)
+            print(f"✅ Collection '{args.collection}' deleted successfully.")
+        except Exception as e:
+            print(f"⚠️  Could not delete collection (it may not exist yet): {e}")
+    # --- End of the fix ---
+
     # Fixed model configuration
     model_name = DEFAULT_MODEL  # Always use Phi-4-mini
     use_quantization = not args.no_quantization
@@ -72,7 +91,7 @@ def main():
         rag = FinancialReportRAG(
             model_name=model_name,
             collection_name=args.collection,
-            persist_directory="./chroma_db",
+            persist_directory=persist_directory, # Use the variable here
             use_gpu=use_gpu,
             use_quantization=use_quantization
         )

@@ -66,7 +66,8 @@ python runner.py \
     --batch-size 50 \
     --max-files 3 \
     --collection report_3 \
-    --extract-entities
+    --extract-entities \
+    --reset-collection
 
 # Check exit code
 if [ $? -eq 0 ]; then
