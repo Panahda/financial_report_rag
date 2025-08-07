@@ -1,0 +1,13 @@
+{
+  "file_name": "VCS_1465_1.pdf",
+  "chunk_index": 27,
+  "page": 14,
+  "content": "Based on the GSS reading and controller reading of each WTG, the ReGen apportions the export & import reading for each project owner as per the procedure given in the MR and provides the apportioned import & export in monthly share\n\n< @ w\n\n14\n\nVCS/ sts\n\nVERIFICATION REPORT: ves version 3\n\ncertificate. The apportioned procedure mentioned in MR is correct which is confirmed by recalculating the final values form GSS & controller reading. The net electricity supplied to grid by project WTGs are calculated difference between apportioned export & import value provided in the share certificate. The same is considered for the ER calculation. The bulk meter readings are crosschecked through monthly JMRs’*” readings and the apportioned data are crosschecked through share certificate” provided by project developer. Also the net electricity supplied to grid by OJWEPL & ORPPL are crosschecked with the sale invoices” raised by the each PP to the DISCOM and found to be correct. The total quantity of net electricity supplied to grid by the project (EGiaciity) Calculation provided in the ER calculation sheet” is verified and found to be correct. Hence the value considered for this parameter is correct.",
+  "entities": {
+    "CAR": [],
+    "CL": [],
+    "FAR": []
+  },
+  "content_length": 1205,
+  "processed_date": "2025-08-07T19:36:24.952090"
+}

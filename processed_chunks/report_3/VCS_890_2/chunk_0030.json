@@ -1,0 +1,13 @@
+{
+  "file_name": "VCS_890_2.pdf",
+  "chunk_index": 30,
+  "page": 15,
+  "content": "[Baseline emissions]\n\nThe baseline emissions are the baseline emission reductions factor times the net electricity supplied to the grid. Therefore,\n\nBE,= EF, x EG,\n\nEF,: GHG emission factor of the NEPG, calculated ex ante in the registered CDM-PDD and VCS-PD as 1.1459 tCO2e/MWh\n\nEG,: Net electricity supplied to the grid\n\nThe net electricity supplied by the Project (EG,) can be calculated as:\n\nEG, = Eexport - Eimport\n\n”!\n\n3]\n\nThe verification team has cross-checked the values from the MRRs with the sales receipts for the period from 02/12/2008-27/07/2010. The conservative values are used for emission reductions calculation. The verified values are shown in the following Table 3.\n\nv3.1\n\n: | VERIFIED VCS | sees\n\nVERIFICATION REPORT: ves version 3",
+  "entities": {
+    "CAR": [],
+    "CL": [],
+    "FAR": []
+  },
+  "content_length": 753,
+  "processed_date": "2025-08-07T19:31:02.113165"
+}

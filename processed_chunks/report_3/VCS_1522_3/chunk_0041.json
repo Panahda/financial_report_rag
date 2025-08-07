@@ -1,0 +1,13 @@
+{
+  "file_name": "VCS_1522_3.pdf",
+  "chunk_index": 41,
+  "page": 24,
+  "content": "The net generation for this monitoring period is higher than the ex-ante estimated. Verification team has checked the IRR sheet, the breaching point for the electricity generation for additionality is 34.2%. The increase in generation is lower than that, hence project is still additional. Further Hydro generation is unexpected i.e. based on the water availability and not in the control of PP.\n\nParameters not monitored/ex-ante:\n\n4. EFgria,cm,y (tCO2/MWh)\n\nCombined margin CO2 emission factor for grid connected power generation in year y\n\n24\n\nVv vcs\n\nVerification Report: VCS Version 4.2\n\nDiscussion and verification assessment Purpose of data Calculation of baseline emissions Verified value 0.6042 tCO2/MWh Source of value Registered VCS-PD /05/ Justification It is fixed for the entire crediting period as per the registered VCS-PD /05/. The value of the Combined margin emission factor has been correctly taken as per the registered VCS-PD /05/ and Hence accepted by the verification team.\n\n5. Caps (W)",
+  "entities": {
+    "CAR": [],
+    "CL": [],
+    "FAR": []
+  },
+  "content_length": 1009,
+  "processed_date": "2025-08-07T19:34:11.745146"
+}

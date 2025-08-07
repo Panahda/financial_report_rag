@@ -1,0 +1,13 @@
+{
+  "file_name": "VCS_1465_1.pdf",
+  "chunk_index": 29,
+  "page": 16,
+  "content": "Hence verification team conclude that the GHG emission reductions and removals have been quantified correctly in accordance with the project description and applied methodology.\n\n4.3 Quality of Evidence to Determine GHG Emission Reductions and Removals\n\nThe only monitoring parameter in the project is Quantity of net electricity supplied to the grid during the year y (EG facility). The monthly calculation of net electricity by the project WTG is done by project developer (Suzlon or ReGen) based on the project site metering (PSS energy meter for OJWEPL or controller for ORPPL) and government substation (GSS) bulk metering and the same is provided in the share certificate. All the monthly EG facitiy,y data is crosschecked with the JMR & share certificate” . As per Power Purchase Agreement (PPA), the same net generation data provided in the monthly share certificate is used for billing. Hence the data is also cross-checked with the monthly electricity invoices” and found to be correct. Since the data considered for ER calculation is same as the data used for billing, the data considered is appropriate.",
+  "entities": {
+    "CAR": [],
+    "CL": [],
+    "FAR": []
+  },
+  "content_length": 1115,
+  "processed_date": "2025-08-07T19:36:24.952710"
+}

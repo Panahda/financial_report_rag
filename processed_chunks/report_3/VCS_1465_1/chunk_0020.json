@@ -1,0 +1,13 @@
+{
+  "file_name": "VCS_1465_1.pdf",
+  "chunk_index": 20,
+  "page": 11,
+  "content": "Original description in PD Revised description in MR Verification team’s opinion Net electricity supplied will be calculated based on_ the difference between calculated values of “export”, “import” and “transmission loss” on the EB energy meter at the “evacuation point” and at “220 kV sub station”. Transmission loss is calculated on pro-rata basis as per the readings of 220KV substation & “primary metering Point’. (Net Electricity = Export Net electricity supplied is calculated based on_ the difference between calculated values of “export” (which already accounts for losses during transmission) and “import” on the EB energy meter at the Government substation. Transmission loss is accounted in Net export at substation based on_ the readings of Government substation & “primary metering As per actual billing procedure, the net electricity is calculated based on the apportioned export & import of readings which are estimated based on PSS meter/controller readings and GSS meter reading. This does not account transmission loss separately. The PP also included apportioning procedure which is not part of validated PD. The apportioning procedure is verified by",
+  "entities": {
+    "CAR": [],
+    "CL": [],
+    "FAR": []
+  },
+  "content_length": 1169,
+  "processed_date": "2025-08-07T19:36:24.950644"
+}

@@ -1,0 +1,13 @@
+{
+  "file_name": "VCS_1522_3.pdf",
+  "chunk_index": 44,
+  "page": 26,
+  "content": "Calculation of EGriy\n\nSince the project activity is “the installation of a new grid-connected renewable power plant at a site where no renewable power plant was operated prior to the implementation of the project activity”, it verifies the case of a Greenfield renewable energy power plant of the ACMO002 methodology Version 16.0 whereby:\n\nEGpiy = EGracility,y\n\nWhere:\n\nEGpiy = Quantity of net electricity generation that is produced and fed into the grid as a result of the implementation of the VCS project activity in year y (MWh/yr)\n\nEGracility,y = Quantity of net electricity generation supplied by the project plant/unit to the grid in year y (MWh/yr)\n\nEGpiy (or EGracilityy) is an ex-post parameter and EFgriacuy is an ex-ante parameter which are justified above.\n\n26\n\nVv vcs\n\nVerification Report: VCS Version 4.2\n\nThe baseline emission calculation for the monitoring period is described in the table below:\n\nEF gria,cm,y (tCOze/MWh) From 01/07/2022 to 31/12/2022 765,555 0.6042 462,548 From 01/01/2023 to 30/06/2023 744,251 0.6042 449,676 Total 1,509,806 : 912,224\n\nThe baseline emission (BEy) for the monitoring period is:\n\nBEy = 912,224 tCO2",
+  "entities": {
+    "CAR": [],
+    "CL": [],
+    "FAR": []
+  },
+  "content_length": 1151,
+  "processed_date": "2025-08-07T19:34:11.745755"
+}

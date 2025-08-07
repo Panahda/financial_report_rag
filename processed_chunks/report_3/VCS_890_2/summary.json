@@ -1,0 +1,33 @@
+{
+  "pdf_name": "VCS_890_2.pdf",
+  "total_chunks": 42,
+  "total_characters": 39152,
+  "pages_covered": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    18,
+    19,
+    21,
+    22,
+    23
+  ],
+  "entities_found": {
+    "CAR": 1,
+    "CL": 2,
+    "FAR": 1
+  },
+  "processed_date": "2025-08-07T19:31:02.250902"
+}

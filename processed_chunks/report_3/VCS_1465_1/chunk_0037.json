@@ -1,0 +1,15 @@
+{
+  "file_name": "VCS_1465_1.pdf",
+  "chunk_index": 37,
+  "page": 21,
+  "content": "CAR 03 It is mentioned that ‘Quantity of net electricity supplied to the grid during the year y’ will be sourced from JMR. However Pratapgarh site JMR contains only the bulk meter reading which includes non-project WTGs also. Mention clearly that how the data will be measured for the project WTGs only. MR-Section 3.2: JMR contains electricity supplied by “Project WTGs” and “Non-Project WTGs’ as well. For this purpose the Developer (ReGen & Suzlon for ORPPL & OJWEPL respectively) calculates the share of electricity by Project WTGs and provides a generation Certificate. This certificate is used to raise invoice to the Discom. As correctly pointed out by the DOE, | The share certificate prepared by project developer is now included as source of ‘Quantity of net electricity supplied to the grid during the year y’ along with the JMR based on which the share certificate is prepared. Also, the apportioning procedure of net electricity is mentioned in the MR now. The revised details are in line with the site actual condition. The method to calculate the electricity share by “Project WTGs” has been elaborated in section 3.2 and 3.3 of the revised Monitoring Report. However, these details are not clearly explained in the validated PD. Hence, the PP has explained the same in the section 2.2.2 of MR as deviation from project",
+  "entities": {
+    "CAR": [
+      "CAR 03"
+    ],
+    "CL": [],
+    "FAR": []
+  },
+  "content_length": 1334,
+  "processed_date": "2025-08-07T19:36:24.954379"
+}

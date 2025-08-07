@@ -1,0 +1,13 @@
+{
+  "file_name": "VCS_890_2.pdf",
+  "chunk_index": 26,
+  "page": 14,
+  "content": "VERIFICATION REPORT. ves version 3\n\nThe net electricity supplied by the Project is the electricity exported to the grid minus the electricity imported from the grid by the Project which is measured by the bidirectional meters. Therefore EG, can be calculated as below:\n\nEG,= export - Eimport\n\nAs described above, the meters have been installed in accordance with the registered CDM-PDD and VCS-PD. The verification team has on-site checked the location of the meters against the diagram of power connection system and found them to be consistent.\n\nThe readings of the meter M1 and meter M2 in the two loops are hourly monitored and monthly recorded by the PP automatically by the computer system. 24:00 o'clock on the last day each month is the cut-off time to calculate the monthly quantity of net electricity generation supplied by the Project. The grid company provided the PP with the sales receipts monthly, which contain the electricity exported to and imported from the gird by the Project. For 0:00 02/12/2008 to 24:00 31/12/2008 and 0:00 01/07/2010 to 24:00 27/07/2010, separate sales receipts are issued by the grid company.\n\nThe verification team has verified the values provided in the monitoring report and ER spreadsheet against the relevant documented evidences i.e. the MRRs 2] and the sales receipts ™) and found them to be consistent with the evidences. The MRRs and the sales receipts can cover this monitoring period from 02/12/2008-27/07/2010.",
+  "entities": {
+    "CAR": [],
+    "CL": [],
+    "FAR": []
+  },
+  "content_length": 1464,
+  "processed_date": "2025-08-07T19:31:02.112519"
+}

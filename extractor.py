@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 class EntityExtractor:
     def __init__(self, collection_name: str, persist_directory: str = "./chroma_db", 
-                 model_name: str = "microsoft/Phi-3.5-mini-instruct",
+                 model_name: str = "microsoft/Phi-4-mini-instruct",
                  use_quantization: bool = True,
                  use_gpu: bool = None):
         """
@@ -226,15 +226,16 @@ IMPORTANT: Only extract items that are clearly identified as audit findings. Do 
                 offset = batch_num * batch_size
                 limit = min(batch_size, doc_count - offset)
                 
-                logger.info(f"Retrieving batch {batch_num + 1}/{total_batches} (offset: {offset}, limit: {limit})")
+                logger.info(f"Retrieving batch {batch_num + 1}/{total_batches} (limit: {limit}, offset: {offset})")
                 
+                # ChromaDB's get method - proper parameter order
                 batch = self.collection.get(
-                    include=["documents", "metadatas"],
                     limit=limit,
-                    offset=offset
+                    offset=offset,
+                    include=["documents", "metadatas"]
                 )
                 
-                if batch["documents"]:
+                if batch and batch.get("documents"):
                     for doc, meta in zip(batch["documents"], batch["metadatas"]):
                         all_docs.append((doc, meta))
                     logger.info(f"  Retrieved {len(batch['documents'])} documents in this batch")
@@ -250,6 +251,7 @@ IMPORTANT: Only extract items that are clearly identified as audit findings. Do 
             
         except Exception as e:
             logger.error(f"Failed to retrieve documents: {e}")
+            logger.error(f"Error type: {type(e).__name__}")
             logger.error(f"Error details: {str(e)}")
             self._save_results([], {"CAR": [], "CL": [], "FAR": []})
             return [], {"CAR": [], "CL": [], "FAR": []}
@@ -257,7 +259,7 @@ IMPORTANT: Only extract items that are clearly identified as audit findings. Do 
         # Group documents by file
         docs_by_file = {}
         for doc_text, metadata in all_docs:
-            file_name = metadata.get("file_name", "unknown")
+            file_name = metadata.get("file_name", "unknown") if metadata else "unknown"
             if file_name not in docs_by_file:
                 docs_by_file[file_name] = []
             docs_by_file[file_name].append((doc_text, metadata))
@@ -286,7 +288,7 @@ IMPORTANT: Only extract items that are clearly identified as audit findings. Do 
                     category = entity.get("category", "").upper()
                     if category in file_entities:
                         entity["source_file"] = file_name
-                        entity["page"] = metadata.get("page", "unknown")
+                        entity["page"] = metadata.get("page", "unknown") if metadata else "unknown"
                         file_entities[category].append(entity)
                         all_entities[category].append(entity)
             

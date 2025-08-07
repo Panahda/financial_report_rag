@@ -1,0 +1,13 @@
+{
+  "file_name": "VCS_1522_3.pdf",
+  "chunk_index": 43,
+  "page": 26,
+  "content": "Opinion:\n\nIn the opinion of assessment team, emission factor values that were applied in the calculations is consistent with registered PDD /05/ and correctly applied in MR /1.2/, emission reduction spread sheet /2.2/ and justified.\n\nAssessment of Data and Calculation of GHG emission reductions:\n\nAccording to the approved methodology ACMOOO2, Version 16.0, Emission Reductions are calculated as follows:\n\nBaseline Emissions\n\nThe baseline emissions are calculated as follows:\n\nBEy = EGpuy * EFgria,cmy\n\nWhere:\n\nBEy = Baseline emissions in year y(tCO2/yr) EGp, y = Quantity of net electricity genenration that is produced and fed into the grid as a result of the implementation of the VCS project activity in year y(MWh/yr) EF gria,cmy = Combined margin CO2 emission factor for grid connected power generation in year y(tC02/MWh)",
+  "entities": {
+    "CAR": [],
+    "CL": [],
+    "FAR": []
+  },
+  "content_length": 829,
+  "processed_date": "2025-08-07T19:34:11.745537"
+}

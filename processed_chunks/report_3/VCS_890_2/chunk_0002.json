@@ -1,0 +1,15 @@
+{
+  "file_name": "VCS_890_2.pdf",
+  "chunk_index": 2,
+  "page": 2,
+  "content": "The first output of the verification process is a list of Clarification Requests, Corrective Actions Requests, Forward Actions Requests (CLs, CARs and FARs).\n\nIn summary, Bureau Veritas Certification confirms that the Project is implemented as planned and described in the VCS-PD. Deviations from the monitoring plan are sufficiently justified. Installed equipment being essential for generating emission reduction runs reliably and is calibrated appropriately. The monitoring system is in place and the Project is ready to reduce GHG emission. The GHG emission reduction is calculated without material misstatements.\n\nOur opinion relates to the Project's GHG emissions and the resulting GHG emission reductions viz. Voluntary Carbon Units (VCUs) reported are based on the valid project baseline, monitoring plan and associated documents. Based on the evidence and information that are considered necessary to guarantee that GHG emission reductions are appropriately calculated, Bureau Veritas Certification confirms following statement:\n\nReporting period Baseline Project Leakage Emission emissions emissions emission Reductions (tCOze) (tCOze) (tCOze) (tCOze) 02/12/2008-31/12/2008 10,242 0 0 10,242 01/01/2009-31/12/2009 165,773 165,773 01/01/2010-27/07/2010 70,866 70,866 Total 246,881 246,881",
+  "entities": {
+    "CAR": [],
+    "CL": [
+      "Clarification Request"
+    ],
+    "FAR": []
+  },
+  "content_length": 1297,
+  "processed_date": "2025-08-07T19:31:02.108022"
+}
