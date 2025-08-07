@@ -4,7 +4,8 @@ data/all/*
 
 # results files
 results/*
-chroma_results/*
+chroma_db/*
+processed_chunks/*
 # logs
 sbatch_log/*
 
