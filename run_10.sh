@@ -5,7 +5,7 @@
 #SBATCH --ntasks=1         
 #SBATCH --mem=30G
 #SBATCH --cpus-per-task=8
-#SBATCH --time=48:00:00
+#SBATCH --time=24:00:00
 #SBATCH --output=sbatch_log/rag_hf_%j.out
 #SBATCH --error=sbatch_log/rag_hf_%j.err
 
@@ -53,7 +53,7 @@ python -c "import transformers; print(f'Transformers: {transformers.__version__}
 echo "========================================"
 
 # Set collection name
-COLLECTION_NAME="report_all"
+COLLECTION_NAME="report_3"
 PDF_DIR="./data/all"
 
 echo "Starting COMPLETE FRESH RAG pipeline..."
@@ -61,14 +61,22 @@ echo "Collection: $COLLECTION_NAME"
 echo "PDF Directory: $PDF_DIR"
 echo "========================================"
 
-python runner.py \
-    --pdf-dir "$PDF_DIR" \
-    --collection "$COLLECTION_NAME" \
-    --mode both \
-    --batch-size 200 \
-    --extraction-batch-size 100 \
-    --validate \
-    --quality-check
+# python runner.py \
+#     --pdf-dir "$PDF_DIR" \
+#     --collection "$COLLECTION_NAME" \
+#     --mode both \
+#     --batch-size 200 \
+#     --extraction-batch-size 100 \
+#     --validate \
+#     --quality-check \
+#     --max-files 3
 
+    # --reset-collection \# Uncomment if you want to reset the collection
+
+python extractor.py \
+    --collection "$COLLECTION_NAME" \
+    --batch-size 200
+
+    
 # Capture exit code
 EXIT_CODE=$?

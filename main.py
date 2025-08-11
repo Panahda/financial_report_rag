@@ -4,10 +4,13 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 import subprocess
 import torch
 import random
+import time
+from tqdm import tqdm
+from natsort import natsorted
 
 # Core libraries
 import chromadb
@@ -37,6 +40,88 @@ logger = logging.getLogger(__name__)
 # Model configuration - using Phi-4-mini as the default
 DEFAULT_MODEL = "microsoft/Phi-4-mini-instruct"
 
+class ProgressMonitor:
+    """Monitor and display progress of vectorization"""
+    def __init__(self, total_files: int):
+        self.total_files = total_files
+        self.files_processed = 0
+        self.chunks_processed = 0
+        self.chunks_added = 0
+        self.start_time = time.time()
+        self.file_times = []
+        self.current_file = None
+        self.errors = []
+        
+    def start_file(self, filename: str):
+        """Mark the start of processing a file"""
+        self.current_file = filename
+        self.file_start_time = time.time()
+        
+    def finish_file(self, chunks_count: int, success: bool = True):
+        """Mark the end of processing a file"""
+        file_time = time.time() - self.file_start_time
+        self.file_times.append(file_time)
+        
+        if success:
+            self.files_processed += 1
+            self.chunks_processed += chunks_count
+        else:
+            self.errors.append(self.current_file)
+        
+        self.current_file = None
+        
+    def update_chunks_added(self, count: int):
+        """Update the count of chunks added to vector store"""
+        self.chunks_added += count
+        
+    def get_eta(self) -> str:
+        """Calculate estimated time remaining"""
+        if self.files_processed == 0:
+            return "Calculating..."
+        
+        avg_time_per_file = sum(self.file_times) / len(self.file_times)
+        remaining_files = self.total_files - self.files_processed
+        eta_seconds = avg_time_per_file * remaining_files
+        
+        if eta_seconds < 60:
+            return f"{int(eta_seconds)}s"
+        elif eta_seconds < 3600:
+            return f"{int(eta_seconds/60)}m {int(eta_seconds%60)}s"
+        else:
+            hours = int(eta_seconds/3600)
+            minutes = int((eta_seconds%3600)/60)
+            return f"{hours}h {minutes}m"
+    
+    def get_speed(self) -> str:
+        """Calculate processing speed"""
+        elapsed = time.time() - self.start_time
+        if elapsed == 0:
+            return "N/A"
+        
+        files_per_min = (self.files_processed / elapsed) * 60
+        chunks_per_min = (self.chunks_processed / elapsed) * 60
+        
+        return f"{files_per_min:.1f} files/min, {chunks_per_min:.0f} chunks/min"
+    
+    def print_status(self):
+        """Print current status"""
+        elapsed = time.time() - self.start_time
+        elapsed_str = str(timedelta(seconds=int(elapsed)))
+        
+        progress_pct = (self.files_processed / self.total_files) * 100 if self.total_files > 0 else 0
+        
+        status = f"""
+║ Files:     {self.files_processed:4d}/{self.total_files:4d} ({progress_pct:5.1f}%)  
+║ Chunks:    {self.chunks_processed:6d} extracted, {self.chunks_added:6d} added to store 
+║ Speed:     {self.get_speed():40s} 
+║ Elapsed:   {elapsed_str:20s}
+║ ETA:       {self.get_eta():20s}
+║ Errors:    {len(self.errors):4d}"""
+        print(status)
+        
+        if self.current_file:
+            print(f"🔄 Currently processing: {self.current_file}")
+
 class FinancialReportRAG:
     def __init__(self, 
                  model_name: str = "microsoft/Phi-4-mini-instruct",  
@@ -44,12 +129,16 @@ class FinancialReportRAG:
                  persist_directory: str = "./chroma_db",
                  use_gpu: bool = None,
                  use_quantization: bool = True,  # Add quantization option
-                 reset_collection: bool = False):  # Add reset collection option
+                 reset_collection: bool = False,  # Add reset collection option
+                 show_progress: bool = True):  # Add progress monitoring option
     
         self.model_name = model_name
         self.collection_name = collection_name
         self.persist_directory = persist_directory
-        
+        self.chunks_output_dir = Path(f"processed_chunks/{self.collection_name}")
+        self.show_progress = show_progress
+        self.progress_monitor = None
+
         # Auto-detect GPU if not specified
         if use_gpu is None:
             use_gpu = torch.cuda.is_available()
@@ -289,9 +378,16 @@ class FinancialReportRAG:
     
     def process_pdf(self, pdf_path: str) -> List[Document]:
         """Process a single PDF file and extract content"""
-        logger.info(f"Processing PDF: {pdf_path}")
-        documents = []
+        if not self.show_progress:
+            logger.info(f"Processing PDF: {pdf_path}")
         
+        documents = []
+        chunks_to_save = []
+
+        self.chunks_output_dir.mkdir(parents=True, exist_ok=True)
+        output_filename = f"{Path(pdf_path).stem}_chunks.json"
+        output_filepath = self.chunks_output_dir / output_filename
+
         try:
             # Use unstructured to partition PDF
             elements = partition_pdf(
@@ -335,70 +431,44 @@ class FinancialReportRAG:
                 entities_found = self.extract_entities_from_text(text)
                 
                 # Create document with serializable metadata only
-                doc = Document(
-                    page_content=text,
-                    metadata={
-                        'source': pdf_path,
-                        'file_name': os.path.basename(pdf_path),
-                        'chunk_index': i,
-                        'page': page_num if page_num is not None else 'unknown',
-                        'entities_json': json.dumps(entities_found),  # Store as JSON string
-                        'car_count': len(entities_found.get('CAR', [])),
-                        'cl_count': len(entities_found.get('CL', [])),
-                        'far_count': len(entities_found.get('FAR', [])),
-                        'processed_date': datetime.now().isoformat()
-                    }
-                )
+                metadata = {
+                    'source': pdf_path,
+                    'file_name': os.path.basename(pdf_path),
+                    'chunk_index': i,
+                    'page': page_num if page_num is not None else 'unknown',
+                    'entities_json': json.dumps(entities_found),
+                    'car_count': len(entities_found.get('CAR', [])),
+                    'cl_count': len(entities_found.get('CL', [])),
+                    'far_count': len(entities_found.get('FAR', [])),
+                    'processed_date': datetime.now().isoformat()
+                }
+                
+                doc = Document(page_content=text, metadata=metadata)
                 documents.append(doc)
+                
+                chunks_to_save.append({
+                    "content": text,
+                    "metadata": metadata
+                })
             
-            logger.info(f"✅ Extracted {len(documents)} chunks from {os.path.basename(pdf_path)}")
+            if not self.show_progress:
+                logger.info(f"✅ Extracted {len(documents)} chunks from {os.path.basename(pdf_path)}")
             
         except Exception as e:
-            logger.error(f"❌ Error processing {pdf_path} with unstructured: {e}")
-            logger.error(f"Error type: {type(e).__name__}")
-            
-            # Fallback: Try simple text extraction
-            try:
-                logger.info("Attempting fallback text extraction with PyPDF2...")
-                import PyPDF2
-                
-                with open(pdf_path, 'rb') as file:
-                    pdf_reader = PyPDF2.PdfReader(file)
-                    
-                    for page_num, page in enumerate(pdf_reader.pages):
-                        text = page.extract_text()
-                        if text.strip():
-                            # Split into chunks
-                            text_splitter = RecursiveCharacterTextSplitter(
-                                chunk_size=1500,
-                                chunk_overlap=200
-                            )
-                            chunks = text_splitter.split_text(text)
-                            
-                            for i, chunk_text in enumerate(chunks):
-                                entities_found = self.extract_entities_from_text(chunk_text)
-                                doc = Document(
-                                    page_content=chunk_text,
-                                    metadata={
-                                        'source': pdf_path,
-                                        'file_name': os.path.basename(pdf_path),
-                                        'page': page_num + 1,
-                                        'chunk_index': i,
-                                        'entities_json': json.dumps(entities_found),
-                                        'car_count': len(entities_found.get('CAR', [])),
-                                        'cl_count': len(entities_found.get('CL', [])),
-                                        'far_count': len(entities_found.get('FAR', [])),
-                                        'processed_date': datetime.now().isoformat()
-                                    }
-                                )
-                                documents.append(doc)
-                    
-                    logger.info(f"✅ Fallback extraction successful: {len(documents)} chunks")
-                        
-            except Exception as e2:
-                logger.error(f"Fallback extraction also failed: {e2}")
-                logger.error(f"Error type: {type(e2).__name__}")
+            if not self.show_progress:
+                logger.error(f"❌ Error processing {pdf_path} with unstructured: {e}")
+                logger.error(f"Error type: {type(e).__name__}")
         
+        if chunks_to_save:
+            try:
+                with open(output_filepath, 'w', encoding='utf-8') as f:
+                    json.dump(chunks_to_save, f, indent=2, ensure_ascii=False)
+                if not self.show_progress:
+                    logger.info(f"📁 Saved {len(chunks_to_save)} chunks to {output_filepath}")
+            except Exception as e:
+                if not self.show_progress:
+                    logger.error(f"❌ Failed to save chunks to file: {e}")
+                
         return documents
     
     def extract_entities_from_text(self, text: str) -> Dict[str, List[str]]:
@@ -417,27 +487,19 @@ class FinancialReportRAG:
         return found_entities
     
     def batch_process_pdfs(self, 
-                          pdf_directory: str,
-                          batch_size: int = 10,
-                          max_files: Optional[int] = None,
-                          file_pattern: Optional[str] = None,
-                          shuffle: bool = False) -> None:
-        """Process multiple PDFs in batches"""
+                      pdf_directory: str,
+                      batch_size: int = 10,
+                      max_files: Optional[int] = None) -> None:
+        """Process multiple PDFs in batches with progress monitoring"""
         pdf_dir = Path(pdf_directory)
         
         # Get all PDF files
-        if file_pattern:
-            pdf_files = [f for f in pdf_dir.glob("*.pdf") if re.match(file_pattern, f.name)]
-        else:
-            pdf_files = list(pdf_dir.glob("*.pdf"))
-        
+        pdf_files = list(pdf_dir.glob("*.pdf"))
+        pdf_files = natsorted(pdf_files)
+
         if not pdf_files:
             logger.warning(f"No PDF files found in {pdf_directory}")
             return
-        
-        # Shuffle if requested
-        if shuffle:
-            random.shuffle(pdf_files)
         
         # Limit files if specified
         if max_files:
@@ -450,70 +512,156 @@ class FinancialReportRAG:
             logger.error("❌ Vector store not initialized! Please call setup_vector_store() first.")
             return
         
+        # Initialize progress monitor
+        if self.show_progress:
+            self.progress_monitor = ProgressMonitor(len(pdf_files))
+            print("\n" + "="*70)
+            print("Starting Vectorization Process")
+            print("="*70)
+        
         # Process in batches
         total_processed = 0
         total_chunks = 0
         total_added = 0
         
-        for batch_start in range(0, len(pdf_files), batch_size):
-            batch_end = min(batch_start + batch_size, len(pdf_files))
-            batch_files = pdf_files[batch_start:batch_end]
+        # Create progress bar for files if tqdm is available
+        file_iterator = tqdm(pdf_files, desc="Processing PDFs", unit="file") if self.show_progress else pdf_files
+        
+        for file_idx, pdf_file in enumerate(file_iterator):
+            # Start monitoring this file
+            if self.progress_monitor:
+                self.progress_monitor.start_file(pdf_file.name)
             
-            logger.info(f"Processing batch {batch_start//batch_size + 1}: "
-                       f"Files {batch_start + 1}-{batch_end} of {len(pdf_files)}")
-            
-            batch_documents = []
-            
-            for pdf_file in batch_files:
-                try:
-                    # Process individual PDF
-                    documents = self.process_pdf(str(pdf_file))
+            try:
+                # Process individual PDF
+                documents = self.process_pdf(str(pdf_file))
+                
+                if documents:
+                    # Add documents to vector store in small batches
+                    sub_batch_size = 20
+                    added_count = 0
                     
-                    if documents:
-                        batch_documents.extend(documents)
-                        total_processed += 1
-                        total_chunks += len(documents)
-                        logger.info(f"  ✅ {pdf_file.name}: {len(documents)} chunks")
+                    if self.show_progress:
+                        chunk_iterator = tqdm(
+                            range(0, len(documents), sub_batch_size),
+                            desc=f"  Adding chunks from {pdf_file.name}",
+                            leave=False,
+                            unit="batch"
+                        )
                     else:
+                        chunk_iterator = range(0, len(documents), sub_batch_size)
+                    
+                    for i in chunk_iterator:
+                        sub_batch = documents[i:i+sub_batch_size]
+                        try:
+                            self.vector_store.add_documents(sub_batch)
+                            added_count += len(sub_batch)
+                            total_added += len(sub_batch)
+                            
+                            if self.progress_monitor:
+                                self.progress_monitor.update_chunks_added(len(sub_batch))
+                        except Exception as e:
+                            logger.error(f"Failed to add sub-batch: {e}")
+                    
+                    total_processed += 1
+                    total_chunks += len(documents)
+                    
+                    if self.progress_monitor:
+                        self.progress_monitor.finish_file(len(documents), success=True)
+                    
+                    if not self.show_progress:
+                        logger.info(f"  ✅ {pdf_file.name}: {len(documents)} chunks")
+                else:
+                    if self.progress_monitor:
+                        self.progress_monitor.finish_file(0, success=False)
+                    
+                    if not self.show_progress:
                         logger.warning(f"  ⚠️ {pdf_file.name}: No content extracted")
                         
-                except Exception as e:
+            except Exception as e:
+                if self.progress_monitor:
+                    self.progress_monitor.finish_file(0, success=False)
+                
+                if not self.show_progress:
                     logger.error(f"  ❌ {pdf_file.name}: {e}")
             
-            # Add batch to vector store
-            if batch_documents:
-                try:
-                    logger.info(f"📝 Adding {len(batch_documents)} chunks to vector store...")
-                    
-                    # Add documents in smaller sub-batches to avoid issues
-                    sub_batch_size = 20
-                    for i in range(0, len(batch_documents), sub_batch_size):
-                        sub_batch = batch_documents[i:i+sub_batch_size]
-                        self.vector_store.add_documents(sub_batch)
-                        logger.info(f"  Added sub-batch: {len(sub_batch)} documents")
-                        total_added += len(sub_batch)
-                    
-                    logger.info(f"✅ Batch added to vector store successfully")
-                    
-                    # Force persistence
-                    if hasattr(self.vector_store, '_client'):
-                        self.vector_store._client.persist()
-                    
-                except Exception as e:
-                    logger.error(f"❌ Failed to add batch to vector store: {e}")
-                    logger.error(f"Error type: {type(e).__name__}")
-                    logger.error(f"Error details: {str(e)}")
-            else:
-                logger.warning("No documents in batch to add to vector store")
+            # Print progress status every 5 files or at the end
+            if self.progress_monitor and ((file_idx + 1) % 5 == 0 or file_idx == len(pdf_files) - 1):
+                print("\033[2J\033[H")  # Clear screen
+                self.progress_monitor.print_status()
+        
             
-            # Clear memory
-            if self.device == 'cuda':
+            # Clear memory periodically
+            if self.device == 'cuda' and (file_idx + 1) % 5 == 0:
                 torch.cuda.empty_cache()
         
-        logger.info(f"🎉 Processing complete!")
-        logger.info(f"   Files processed: {total_processed}/{len(pdf_files)}")
-        logger.info(f"   Total chunks created: {total_chunks}")
-        logger.info(f"   Total chunks added to vector store: {total_added}")
+        # Print final summary
+        print("\n" + "="*70)
+        print("Vectorization Complete!")
+        print("="*70)
+        print(f"📊 Final Statistics:")
+        print(f"   Files processed: {total_processed}/{len(pdf_files)}")
+        print(f"   Total chunks created: {total_chunks}")
+        print(f"   Total chunks added to vector store: {total_added}")
+        print(f"   Success rate: {(total_processed/len(pdf_files)*100):.1f}%")
+        
+        if self.progress_monitor and self.progress_monitor.errors:
+            print(f"\n⚠️ Files with errors ({len(self.progress_monitor.errors)}):")
+            for error_file in self.progress_monitor.errors[:10]:  # Show first 10 errors
+                print(f"   - {error_file}")
+            if len(self.progress_monitor.errors) > 10:
+                print(f"   ... and {len(self.progress_monitor.errors) - 10} more")
+        
+        print("="*70)
+    
+    def get_vectorization_status(self) -> Dict[str, Any]:
+        """Get current status of the vector store"""
+        try:
+            collection = self.chroma_client.get_collection(name=self.collection_name)
+            count = collection.count()
+            
+            # Get sample metadata to analyze
+            if count > 0:
+                sample = collection.get(limit=min(count, 100), include=["metadatas"])
+                
+                files = set()
+                total_cars = 0
+                total_cls = 0
+                total_fars = 0
+                
+                for metadata in sample['metadatas']:
+                    if metadata:
+                        files.add(metadata.get('file_name', 'Unknown'))
+                        total_cars += metadata.get('car_count', 0)
+                        total_cls += metadata.get('cl_count', 0)
+                        total_fars += metadata.get('far_count', 0)
+                
+                return {
+                    'status': 'active',
+                    'total_documents': count,
+                    'unique_files': len(files),
+                    'sample_entities': {
+                        'CAR': total_cars,
+                        'CL': total_cls,
+                        'FAR': total_fars
+                    }
+                }
+            else:
+                return {
+                    'status': 'empty',
+                    'total_documents': 0,
+                    'unique_files': 0,
+                    'sample_entities': {'CAR': 0, 'CL': 0, 'FAR': 0}
+                }
+                
+        except Exception as e:
+            return {
+                'status': 'error',
+                'error': str(e),
+                'total_documents': 0,
+                'unique_files': 0,
+                'sample_entities': {'CAR': 0, 'CL': 0, 'FAR': 0}
+            }
     
     def setup_qa_chain(self):
         """Set up the QA chain for querying"""
@@ -645,15 +793,19 @@ def main():
                        help='Force CPU usage')
     parser.add_argument('--reset-collection', action='store_true',
                        help='Reset the collection before processing')
+    parser.add_argument('--no-progress', action='store_true',
+                       help='Disable progress monitoring')
     
     args = parser.parse_args()
     
     use_quantization = not args.no_quantization
     use_gpu = None if not args.force_cpu else False
+    show_progress = not args.no_progress
     
     print(f"Initializing RAG with Phi-4-mini...")
     print(f"Model path: {DEFAULT_MODEL}")
     print(f"Quantization: {use_quantization}")
+    print(f"Progress monitoring: {show_progress}")
     
     # Initialize RAG
     rag = FinancialReportRAG(
@@ -661,7 +813,8 @@ def main():
         collection_name="financial_reports",
         use_gpu=use_gpu,
         use_quantization=use_quantization,
-        reset_collection=args.reset_collection
+        reset_collection=args.reset_collection,
+        show_progress=show_progress
     )
     
     # Test the model

@@ -16,9 +16,12 @@ conda activate rag
 
 ### install requirements
 ```bash
+pip install gpustat
+pip install tqdm
 pip install --upgrade transformers==4.51.3 accelerate==1.3.0 bitsandbytes
 pip install torch==2.5.1 torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 pip install auto-gptq optimum
+
 pip install flash_attn==2.7.4.post1 --no-build-isolation
 pip install --upgrade numpy scipy scikit-learn
 pip install --upgrade unstructured pdf2image pdfplumber pytesseract
